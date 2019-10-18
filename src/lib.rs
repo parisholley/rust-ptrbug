@@ -1,25 +1,28 @@
 #![feature(test)]
+#![feature(maybe_uninit_ref)]
 
 extern crate test;
 
 use crate::bind::{startEngine, engineStruct, getWorker, releaseWorker};
 use std::mem::MaybeUninit;
 use std::ffi::CString;
+use std::ptr::{NonNull};
+use std::pin::Pin;
 
 mod bind;
 
 struct Engine{
-    engine: engineStruct
+    engine: Pin<Box<MaybeUninit<engineStruct>>>
 }
 
 
-fn assert_engine(engine:&engineStruct){
+fn assert_engine(engine:*mut engineStruct){
     unsafe{
-        assert!(std::ptr::eq(engine.pool, (*(*engine.pool).engine).pool));
+        assert!(std::ptr::eq((*engine).pool, (*(*(*engine).pool).engine).pool));
     }
 }
 
-fn do_get_release_worker(engine: &mut engineStruct) -> i32 {
+fn do_get_release_worker(engine: *mut engineStruct) {
     assert_engine(engine);
 
     let released = unsafe {
@@ -30,7 +33,7 @@ fn do_get_release_worker(engine: &mut engineStruct) -> i32 {
 
     assert_engine(engine);
 
-    released
+    assert_eq!(released, 1);
 }
 
 static panic_static:&str = "this static str should not cause panic";
@@ -48,6 +51,10 @@ fn should_not_cause_panic_cstring(){
 
 fn should_not_cause_panic_str(){
     "this inline str should not cause panic";
+}
+
+fn should_not_cause_panic_static_vec(){
+    vec!["1","2","3"];
 }
 
 fn should_not_cause_panic_static_to_string(){
@@ -69,18 +76,9 @@ impl Engine{
         unsafe {
             let mut engine = MaybeUninit::uninit();
 
-            startEngine(engine.as_mut_ptr());
+            let mut boxed = Box::pin(engine);
 
-            let mut assumed = engine.assume_init();
-
-            should_not_cause_panic_println();
-            should_not_cause_panic_cstring();
-            should_not_cause_panic_to_string();
-            should_not_cause_panic_str();
-            should_not_cause_panic_const_to_string();
-            should_not_cause_panic_static_to_string();
-
-            do_get_release_worker(&mut assumed);
+            startEngine(boxed.as_mut_ptr());
 
             should_not_cause_panic_println();
             should_not_cause_panic_cstring();
@@ -88,8 +86,9 @@ impl Engine{
             should_not_cause_panic_str();
             should_not_cause_panic_const_to_string();
             should_not_cause_panic_static_to_string();
+            should_not_cause_panic_static_vec();
 
-            do_get_release_worker(&mut assumed);
+            do_get_release_worker(boxed.as_mut_ptr());
 
             should_not_cause_panic_println();
             should_not_cause_panic_cstring();
@@ -97,15 +96,28 @@ impl Engine{
             should_not_cause_panic_str();
             should_not_cause_panic_const_to_string();
             should_not_cause_panic_static_to_string();
+            should_not_cause_panic_static_vec();
+
+            do_get_release_worker(boxed.as_mut_ptr());
+
+            should_not_cause_panic_println();
+            should_not_cause_panic_cstring();
+            should_not_cause_panic_to_string();
+            should_not_cause_panic_str();
+            should_not_cause_panic_const_to_string();
+            should_not_cause_panic_static_to_string();
+            should_not_cause_panic_static_vec();
 
             Engine {
-                engine: assumed
+                engine: boxed
             }
         }
     }
 
-    fn get_release_worker(&mut self) -> i32 {
-        do_get_release_worker(&mut self.engine)
+    fn get_release_worker(&mut self) {
+        unsafe{
+            do_get_release_worker(self.engine.as_mut_ptr())
+        }
     }
 }
 
@@ -116,7 +128,7 @@ mod tests {
     use std::ffi::CString;
 
     #[test]
-    fn no_panic() {
+    fn no_panic_empty() {
         let mut engine = Engine::new();
 
         engine.get_release_worker();
@@ -130,6 +142,17 @@ mod tests {
         engine.get_release_worker();
 
         should_not_cause_panic_str();
+
+        engine.get_release_worker();
+    }
+
+    #[test]
+    fn panic_static_vec() {
+        let mut engine = Engine::new();
+
+        engine.get_release_worker();
+
+        should_not_cause_panic_static_vec();
 
         engine.get_release_worker();
     }

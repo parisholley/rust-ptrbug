@@ -113,7 +113,7 @@ extern "C" {
     pub fn startEngine(engine: *mut engineStruct);
 }
 extern "C" {
-    pub fn getWorker(engine: *mut engineStruct) -> *mut workerStruct;
+    pub fn getWorker(engine: *const engineStruct) -> *mut workerStruct;
 }
 extern "C" {
     pub fn releaseWorker(worker: *mut workerStruct) -> ::std::os::raw::c_int;
