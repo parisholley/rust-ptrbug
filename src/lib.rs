@@ -18,6 +18,20 @@ fn assert_engine(engine:&engineStruct){
     }
 }
 
+fn do_get_release_worker(engine: &mut engineStruct) -> i32 {
+    assert_engine(engine);
+
+    let released = unsafe {
+        let worker = getWorker(engine);
+
+        releaseWorker(worker) as i32
+    };
+
+    assert_engine(engine);
+
+    released
+}
+
 impl Engine{
     pub fn new() -> Engine{
         let mut engine:MaybeUninit<engineStruct> = unsafe { MaybeUninit::uninit()};
@@ -27,13 +41,12 @@ impl Engine{
 
             startEngine(engine.as_mut_ptr());
 
-            let worker = getWorker(engine.as_mut_ptr());
+            let mut assumed = engine.assume_init();
 
-            releaseWorker(worker);
+            println!("this println does not cause a panic");
 
-            let assumed = engine.assume_init();
-
-            assert_engine(&assumed);
+            do_get_release_worker(&mut assumed);
+            do_get_release_worker(&mut assumed);
 
             Engine {
                 engine: assumed
@@ -42,17 +55,7 @@ impl Engine{
     }
 
     fn get_release_worker(&mut self) -> i32 {
-        assert_engine(&self.engine);
-
-        let released = unsafe {
-            let worker = getWorker(&mut self.engine);
-
-            releaseWorker(worker) as i32
-        };
-
-        assert_engine(&self.engine);
-
-        released
+        do_get_release_worker(&mut self.engine)
     }
 }
 
@@ -67,13 +70,15 @@ mod tests {
 
         println!("this println causes panic");
 
-        let result = engine.get_release_worker();
+        engine.get_release_worker();
+        engine.get_release_worker();
     }
 
     #[test]
     fn no_panic() {
         let mut engine = Engine::new();
 
-        let result = engine.get_release_worker();
+        engine.get_release_worker();
+        engine.get_release_worker();
     }
 }
