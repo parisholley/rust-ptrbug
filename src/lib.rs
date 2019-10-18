@@ -68,9 +68,10 @@ mod tests {
     fn panic() {
         let mut engine = Engine::new();
 
+        engine.get_release_worker();
+
         println!("this println causes panic");
 
-        engine.get_release_worker();
         engine.get_release_worker();
     }
 
